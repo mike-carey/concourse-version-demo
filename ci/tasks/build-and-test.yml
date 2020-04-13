@@ -29,8 +29,10 @@ run:
     - |
       set -euo pipefail
 
+      ROOT_DIR=$PWD
+
       pushd source-code/$DIRECTORY >/dev/null
         ./gradlew --no-daemon clean ${GRADLE_TASK:-build}
-      popd >/dev/null
 
-      cp build/libs/${JAR_FILTER:-*}.jar jar/
+        cp build/libs/${JAR_FILTER:-*}.jar $ROOT_DIR/jar/
+      popd >/dev/null

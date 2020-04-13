@@ -33,6 +33,30 @@ resources:
     <<: *version-source
     file: jar
 
+- name: dev
+  type: semver
+  source:
+    <<: *version-source
+    file: dev
+
+- name: acceptance
+  type: semver
+  source:
+    <<: *version-source
+    file: acceptance
+
+- name: staging
+  type: semver
+  source:
+    <<: *version-source
+    file: staging
+
+- name: prod
+  type: semver
+  source:
+    <<: *version-source
+    file: prod
+
 jobs:
 - name: build-and-publish
   plan:
@@ -43,6 +67,10 @@ jobs:
     - get: version
   - task: build-and-test
     file: ci-git/ci/tasks/build-and-test.yml
+    input_mapping:
+      source-code: api-git
+    params:
+      DIRECTORY: api
   - put: api-jar
     params:
       bump: patch
@@ -61,7 +89,9 @@ jobs:
     - <<: *dev-req
       get: api-jar
       trigger: true
-  # Faking it
+  - put: dev
+    params:
+      file: version/version
 
 - name: publish-to-acceptance
   plan:
@@ -75,7 +105,9 @@ jobs:
       get: version
     - <<: *acceptance-req
       get: api-jar
-  # Faking it
+  - put: acceptance
+    params:
+      file: version/version
   - put: version
     params:
       bump: patch
@@ -92,7 +124,6 @@ jobs:
       get: version
     - <<: *rc-req
       get: api-jar
-  # Faking it
   - put: version
     params:
       pre: rc
@@ -109,7 +140,9 @@ jobs:
       get: version
     - <<: *staging-req
       get: api-jar
-  # Faking it
+  - put: staging
+    params:
+      file: version/version
 
 - name: generate-release-jar
   plan:
@@ -123,7 +156,6 @@ jobs:
       get: version
     - <<: *release-req
       get: api-jar
-  # Faking it
   - put: version
     params:
       bump: final
@@ -140,4 +172,6 @@ jobs:
       get: version
     - <<: *prod-req
       get: api-jar
-  # Faking it
+  - put: prod
+    params:
+      file: version/version
