@@ -19,7 +19,7 @@ caches:
 
 params:
   DIRECTORY: .
-  JAR_FILTER: *
+  JAR_FILTER: '*'
   GRADLE_TASK: build
 
 run:
