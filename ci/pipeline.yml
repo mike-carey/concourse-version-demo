@@ -1,0 +1,143 @@
+---
+resources:
+- name: version
+  type: semver
+  source: &version-source
+    driver: git
+    initial_version: 1.0.0
+    uri: ((version.uri))
+    branch: ((version.branch))
+    file: ((version.file))
+    private_key: ((git_private_key))
+    # private_key: ((version.private_key))
+
+- name: api-git
+  type: git
+  source:
+    uri: ((api.uri))
+    branch: ((api.branch))
+    paths: ((api.paths))
+    private_key: ((git_private_key))
+
+- name: ci-git
+  type: git
+  source:
+    uri: ((ci.uri))
+    branch: ((ci.branch))
+    paths: ((ci.paths))
+    private_key: ((git_private_key))
+
+- name: api-jar
+  type: semver
+  source:
+    <<: *version-source
+    file: jar
+
+jobs:
+- name: build-and-publish
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - get: api-git
+      trigger: true
+    - get: version
+  - task: build-and-test
+    file: ci-git/ci/tasks/build-and-test.yml
+  - put: api-jar
+    params:
+      bump: patch
+
+- name: publish-to-dev
+  serial: true
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &dev-req
+      get: api-git
+      passed:
+      - build-and-publish
+    - <<: *dev-req
+      get: version
+    - <<: *dev-req
+      get: api-jar
+      trigger: true
+  # Faking it
+
+- name: publish-to-acceptance
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &acceptance-req
+      get: api-git
+      passed:
+      - publish-to-dev
+    - <<: *acceptance-req
+      get: version
+    - <<: *acceptance-req
+      get: api-jar
+  # Faking it
+  - put: version
+    params:
+      bump: patch
+
+- name: generate-rc-jar
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &rc-req
+      get: api-git
+      passed:
+      - publish-to-acceptance
+    - <<: *rc-req
+      get: version
+    - <<: *rc-req
+      get: api-jar
+  # Faking it
+  - put: version
+    params:
+      pre: rc
+
+- name: publish-to-staging
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &staging-req
+      get: api-git
+      passed:
+      - generate-rc-jar
+    - <<: *staging-req
+      get: version
+    - <<: *staging-req
+      get: api-jar
+  # Faking it
+
+- name: generate-release-jar
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &release-req
+      get: api-git
+      passed:
+      - publish-to-staging
+    - <<: *release-req
+      get: version
+    - <<: *release-req
+      get: api-jar
+  # Faking it
+  - put: version
+    params:
+      bump: final
+
+- name: publish-to-prod
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &prod-req
+      get: api-git
+      passed:
+      - generate-release-jar
+    - <<: *prod-req
+      get: version
+    - <<: *prod-req
+      get: api-jar
+  # Faking it

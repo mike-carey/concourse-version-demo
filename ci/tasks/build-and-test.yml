@@ -1,0 +1,36 @@
+---
+platform: linux
+
+image_resource:
+  type: docker-image
+  source:
+    repository: java
+    tag: '8'
+
+inputs:
+- name: source-code
+
+outputs:
+- name: jar
+
+caches:
+- path: /root/.gradle/caches
+- path: /root/.gradle/wrapper
+
+params:
+  DIRECTORY: .
+  JAR_FILTER: *
+  GRADLE_TASK: build
+
+run:
+  path: bash
+  args:
+    - '-c'
+    - |
+      set -euo pipefail
+
+      pushd source-code/$DIRECTORY >/dev/null
+        ./gradlew --no-daemon clean ${GRADLE_TASK:-build}
+      popd >/dev/null
+
+      cp build/libs/${JAR_FILTER:-*}.jar jar/

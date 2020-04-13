@@ -1,0 +1,8 @@
+# vi:syntax=sh
+
+export PATH="$PWD/bin:$PATH"
+
+export GITHUB_USERNAME=mike-carey
+export GITHUB_REPO=concourse-version-demo
+
+# .env
