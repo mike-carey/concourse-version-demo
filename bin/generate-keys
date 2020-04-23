@@ -1,0 +1,19 @@
+#!/usr/bin/env bash
+
+function generate-keys() {
+  local concourse_docker="${CONCOURSE_DOCKER:-${VENDOR:-vendor}/concourse-docker}"
+  local keys="${1:-keys}"
+
+  cp -r "$concourse_docker/keys/." keys
+
+  ./keys/generate
+}
+
+if [[ ${BASH_SOURCE[0]} != $0 ]]; then
+  export -f generate-keys
+else
+  set -euo pipefail
+
+  generate-keys "${@:-}"
+  exit $?
+fi
