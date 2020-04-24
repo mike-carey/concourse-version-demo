@@ -13,10 +13,13 @@ pipeline: .vars.yml
 			-l .vars.yml
 	@fly -t $(FLY_TARGET) up \
 			-p $(PIPELINE_NAME)
-ifeq ($(shell uname -s),Darwin)
-	# It is MacOSX, opening in browser
-	@hash yq && open $$(fly targets | awk '{ if ($$1 == "'$(FLY_TARGET)'") { print $$2; }; }')/teams/$$(fly targets | awk '{ if ($$1 == "'$(FLY_TARGET)'") { print $$3; }; }')/pipelines/$(PIPELINE_NAME)
-endif
+# ifeq ($(shell uname -s),Darwin)
+# 	@echo "Opening pipeline in your browser"
+# 	@hash yq && open $$(fly targets | awk '{ if ($$1 == "'$(FLY_TARGET)'") { print $$2; }; }')/teams/$$(fly targets | awk '{ if ($$1 == "'$(FLY_TARGET)'") { print $$3; }; }')/pipelines/$(PIPELINE_NAME)
+# endif
+
+pipeline.yml:
+	jinja2 pipeline.yml.j2 config.yml -o pipeline.yml
 
 .vars.yml:
 	@cp vars.yml .vars.yml

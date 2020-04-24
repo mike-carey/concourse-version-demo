@@ -1,21 +1,17 @@
 ---
-meta:
-  single_repo: &single_repo
-    uri: git@github.com:mike-carey/concourse-version-demo.git
-    branch: master
-    private_key: ((git_private_key))
-
-ci:
-  <<: *single_repo
-  paths:
-    - ci/**
+.defaults: &defaults
+  uri: git@github.com:mike-carey/concourse-version-demo.git
+  branch: master
+  private_key: ((git_private_key))
 
 api:
-  <<: *single_repo
-  paths:
-    - api/**
+  <<: *defaults
+  # branch: master
+
+ci:
+  <<: *defaults
+  # branch: master
 
 version:
-  <<: *single_repo
+  <<: *defaults
   branch: version
-  file: version

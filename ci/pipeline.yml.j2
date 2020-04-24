@@ -1,0 +1,144 @@
+---
+resources:
+{% for resource in git_resources %}
+- name: {{ resource.name }}-git
+  type: git
+  source:
+    uri: {{ resource.uri }}
+    branch: {{ resource.branch }}
+    private_key: {{ resource.private_key }}
+    paths: {{ resource.paths | tojson }}
+{% endfor %}
+
+- name: version
+  type: semver
+  source: &version-source
+    driver: git
+    initial_version: 1.0.0
+    file: version
+    uri: ((version.uri))
+    branch: ((version.branch))
+    private_key: ((version.private_key))
+
+- name: rc-version
+  type: semver
+  source:
+    <<: *version-source
+    file: rc-version
+
+{% for env in environments %}
+- name: {{ env.name }}-version
+  type: semver
+  source:
+    <<: *version-source
+    file: {{ env.name }}-version
+{% endfor %}
+
+{% for artifact in artifacts %}
+- name: {{ artifact }}-artifact
+  type: semver
+  source:
+    <<: *version-source
+    file: {{ artifact }}.jar
+{% endfor %}
+
+{% for env in environments %}
+- name: {{ env.name }}
+  type: semver
+  source:
+    <<: *version-source
+    file: {{ env.name }}
+{% endfor %}
+
+jobs:
+{% for env in environments %}
+- name: deploy-to-{{ env.name }}
+  serial: true
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &{{ env.name }}-req
+      get: api-git
+      passed: [{{ env.previous }}]
+    - <<: *{{ env.name }}-req
+      get: {{ env.version | default('version') }}
+    - <<: *{{ env.name }}-req
+      get: {{ env.artifact }}-artifact
+      trigger: {{ env.trigger | default(False) | lower }}
+  - in_parallel:
+    - put: {{ env.name }}-version
+      params:
+        file: {{ env.version | default('version') }}/version
+    - put: {{ env.name }}
+      params:
+        file: {{ env.artifact }}-artifact/version
+{% endfor %}
+
+{% for build in builds %}
+- name: {{ build.job }}
+  serial_groups:
+  - modifies-version
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &{{ build.name }}-req
+      get: api-git
+      passed: [{{ build.previous }}]
+    - <<: *{{ build.name }}-req
+      get: {{ build.version.in }}
+      trigger: {{ build.trigger | lower }}
+      params: {{ build.version.params | default({}) | tojson }}
+{% if not loop.first %}
+    - <<: *{{ build.name }}-req
+      get: {{ loop.previtem.artifact }}-artifact
+{% endif %}
+{% if loop.first %}
+
+
+  # This is where an implementation of building the project would be
+  # For demonstration purposes, we will just copy the file over
+  - task: build
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: alpine
+      inputs:
+      - name: version
+      outputs:
+      - name: build-output
+      run:
+        path: sh
+        args:
+          - '-xc'
+          - cp version/version build-output/version
+
+
+{% endif %}
+
+  - in_parallel:
+    - put: {{ build.artifact }}-artifact
+      params:
+{% if loop.first %}
+        file: build-output/version
+{% else %}
+        file: {{ loop.previtem.artifact }}-artifact/version
+{% endif %}
+
+    - put: {{ build.version.out }}
+      params:
+        file: {{ build.version.in }}/version
+
+{% endfor %}
+
+
+{% for type in version_types %}
+- name: bump-{{ type }}-version
+  serial_groups:
+  - modifies-version
+  plan:
+  - put: version
+    params:
+      bump: {{ type }}
+{% endfor %}

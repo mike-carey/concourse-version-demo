@@ -1,0 +1,71 @@
+---
+git_resources:
+- name: api
+  uri: ((api.uri))
+  branch: ((api.branch))
+  private_key: ((api.private_key))
+  paths:
+    - api/**
+- name: ci
+  uri: ((ci.uri))
+  branch: ((api.branch))
+  private_key: ((ci.private_key))
+  paths:
+    - ci/**
+
+environments:
+- name: dev
+  artifact: snapshot
+  previous: build-and-publish
+  trigger: true
+- name: acceptance
+  artifact: snapshot
+  previous: deploy-to-dev
+- name: staging
+  artifact: release
+  version: rc-version
+  previous: nominate-for-release
+- name: prod
+  artifact: release
+  version: rc-version
+  previous: prepare-for-prod
+
+builds:
+- name: build
+  job: build-and-publish
+  artifact: snapshot
+  version:
+    in: version
+    params:
+      bump: patch
+    out: version
+- name: rc
+  job: nominate-for-release
+  artifact: release
+  previous: deploy-to-acceptance
+  version:
+    in: version
+    params:
+      bump: minor
+      pre: rc
+    out: rc-version
+- name: release
+  job: prepare-for-prod
+  artifact: release
+  previous: deploy-to-staging
+  version:
+    in: rc-version
+    params:
+      bump: final
+    out: version
+
+
+# Mostly static
+artifacts:
+- release
+- snapshot
+
+version_types:
+- patch
+- minor
+- major

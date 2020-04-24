@@ -1,37 +1,79 @@
 ---
 resources:
-- name: version
-  type: semver
-  source: &version-source
-    driver: git
-    initial_version: 1.0.0
-    uri: ((version.uri))
-    branch: ((version.branch))
-    file: ((version.file))
-    private_key: ((git_private_key))
-    # private_key: ((version.private_key))
 
 - name: api-git
   type: git
   source:
     uri: ((api.uri))
     branch: ((api.branch))
-    paths: ((api.paths))
-    private_key: ((git_private_key))
+    private_key: ((api.private_key))
+    paths: ["api/**"]
 
 - name: ci-git
   type: git
   source:
     uri: ((ci.uri))
-    branch: ((ci.branch))
-    paths: ((ci.paths))
-    private_key: ((git_private_key))
+    branch: ((api.branch))
+    private_key: ((ci.private_key))
+    paths: ["ci/**"]
 
-- name: api-jar
+
+- name: version
+  type: semver
+  source: &version-source
+    driver: git
+    initial_version: 1.0.0
+    file: version
+    uri: ((version.uri))
+    branch: ((version.branch))
+    private_key: ((version.private_key))
+
+- name: rc-version
   type: semver
   source:
     <<: *version-source
-    file: jar
+    file: rc-version
+
+
+- name: dev-version
+  type: semver
+  source:
+    <<: *version-source
+    file: dev-version
+
+- name: acceptance-version
+  type: semver
+  source:
+    <<: *version-source
+    file: acceptance-version
+
+- name: staging-version
+  type: semver
+  source:
+    <<: *version-source
+    file: staging-version
+
+- name: prod-version
+  type: semver
+  source:
+    <<: *version-source
+    file: prod-version
+
+
+
+- name: release-artifact
+  type: semver
+  source:
+    <<: *version-source
+    file: release.jar
+
+- name: snapshot-artifact
+  type: semver
+  source:
+    <<: *version-source
+    file: snapshot.jar
+
+
 
 - name: dev
   type: semver
@@ -57,121 +99,232 @@ resources:
     <<: *version-source
     file: prod
 
-jobs:
-- name: build-and-publish
-  plan:
-  - in_parallel:
-    - get: ci-git
-    - get: api-git
-      trigger: true
-    - get: version
-  - task: build-and-test
-    file: ci-git/ci/tasks/build-and-test.yml
-    input_mapping:
-      source-code: api-git
-    params:
-      DIRECTORY: api
-  - put: api-jar
-    params:
-      bump: patch
 
-- name: publish-to-dev
+jobs:
+
+- name: deploy-to-dev
   serial: true
   plan:
   - in_parallel:
     - get: ci-git
     - &dev-req
       get: api-git
-      passed:
-      - build-and-publish
+      passed: [build-and-publish]
     - <<: *dev-req
       get: version
     - <<: *dev-req
-      get: api-jar
+      get: snapshot-artifact
       trigger: true
-  - put: dev
-    params:
-      file: version/version
+  - in_parallel:
+    - put: dev-version
+      params:
+        file: version/version
+    - put: dev
+      params:
+        file: snapshot-artifact/version
 
-- name: publish-to-acceptance
+- name: deploy-to-acceptance
+  serial: true
   plan:
   - in_parallel:
     - get: ci-git
     - &acceptance-req
       get: api-git
-      passed:
-      - publish-to-dev
+      passed: [deploy-to-dev]
     - <<: *acceptance-req
       get: version
     - <<: *acceptance-req
-      get: api-jar
-  - put: acceptance
-    params:
-      file: version/version
-  - put: version
-    params:
-      bump: patch
-
-- name: generate-rc-jar
-  plan:
+      get: snapshot-artifact
+      trigger: false
   - in_parallel:
-    - get: ci-git
-    - &rc-req
-      get: api-git
-      passed:
-      - publish-to-acceptance
-    - <<: *rc-req
-      get: version
-    - <<: *rc-req
-      get: api-jar
-  - put: version
-    params:
-      pre: rc
+    - put: acceptance-version
+      params:
+        file: version/version
+    - put: acceptance
+      params:
+        file: snapshot-artifact/version
 
-- name: publish-to-staging
+- name: deploy-to-staging
+  serial: true
   plan:
   - in_parallel:
     - get: ci-git
     - &staging-req
       get: api-git
-      passed:
-      - generate-rc-jar
+      passed: [nominate-for-release]
     - <<: *staging-req
-      get: version
+      get: rc-version
     - <<: *staging-req
-      get: api-jar
-  - put: staging
-    params:
-      file: version/version
-
-- name: generate-release-jar
-  plan:
+      get: release-artifact
+      trigger: false
   - in_parallel:
-    - get: ci-git
-    - &release-req
-      get: api-git
-      passed:
-      - publish-to-staging
-    - <<: *release-req
-      get: version
-    - <<: *release-req
-      get: api-jar
-  - put: version
-    params:
-      bump: final
+    - put: staging-version
+      params:
+        file: rc-version/version
+    - put: staging
+      params:
+        file: release-artifact/version
 
-- name: publish-to-prod
+- name: deploy-to-prod
+  serial: true
   plan:
   - in_parallel:
     - get: ci-git
     - &prod-req
       get: api-git
-      passed:
-      - generate-release-jar
+      passed: [prepare-for-prod]
     - <<: *prod-req
+      get: rc-version
+    - <<: *prod-req
+      get: release-artifact
+      trigger: false
+  - in_parallel:
+    - put: prod-version
+      params:
+        file: rc-version/version
+    - put: prod
+      params:
+        file: release-artifact/version
+
+
+
+- name: build-and-publish
+  serial_groups:
+  - modifies-version
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &build-req
+      get: api-git
+      passed: []
+    - <<: *build-req
       get: version
-    - <<: *prod-req
-      get: api-jar
-  - put: prod
+      trigger: 
+      params: {"bump": "patch"}
+
+
+
+
+  # This is where an implementation of building the project would be
+  # For demonstration purposes, we will just copy the file over
+  - task: build
+    config:
+      platform: linux
+      image_resource:
+        type: docker-image
+        source:
+          repository: alpine
+      inputs:
+      - name: version
+      outputs:
+      - name: build-output
+      run:
+        path: sh
+        args:
+          - '-xc'
+          - cp version/version build-output/version
+
+
+
+
+  - in_parallel:
+    - put: snapshot-artifact
+      params:
+
+        file: build-output/version
+
+
+    - put: version
+      params:
+        file: version/version
+
+
+- name: nominate-for-release
+  serial_groups:
+  - modifies-version
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &rc-req
+      get: api-git
+      passed: [deploy-to-acceptance]
+    - <<: *rc-req
+      get: version
+      trigger: 
+      params: {"bump": "minor", "pre": "rc"}
+
+    - <<: *rc-req
+      get: snapshot-artifact
+
+
+
+  - in_parallel:
+    - put: release-artifact
+      params:
+
+        file: snapshot-artifact/version
+
+
+    - put: rc-version
+      params:
+        file: version/version
+
+
+- name: prepare-for-prod
+  serial_groups:
+  - modifies-version
+  plan:
+  - in_parallel:
+    - get: ci-git
+    - &release-req
+      get: api-git
+      passed: [deploy-to-staging]
+    - <<: *release-req
+      get: rc-version
+      trigger: 
+      params: {"bump": "final"}
+
+    - <<: *release-req
+      get: release-artifact
+
+
+
+  - in_parallel:
+    - put: release-artifact
+      params:
+
+        file: release-artifact/version
+
+
+    - put: version
+      params:
+        file: rc-version/version
+
+
+
+
+
+- name: bump-patch-version
+  serial_groups:
+  - modifies-version
+  plan:
+  - put: version
     params:
-      file: version/version
+      bump: patch
+
+- name: bump-minor-version
+  serial_groups:
+  - modifies-version
+  plan:
+  - put: version
+    params:
+      bump: minor
+
+- name: bump-major-version
+  serial_groups:
+  - modifies-version
+  plan:
+  - put: version
+    params:
+      bump: major
+
