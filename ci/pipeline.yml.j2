@@ -99,7 +99,7 @@ jobs:
         file: {{ env.version | default('version') }}/version
     - put: rc-version
       params:
-        bump: {{ env.version | default('version') }}/version
+        file: {{ env.version | default('version') }}/version
 {% endif %}
 {% endfor %}
 
