@@ -13,7 +13,7 @@ resources:
   type: git
   source:
     uri: ((ci.uri))
-    branch: ((api.branch))
+    branch: ((ci.branch))
     private_key: ((ci.private_key))
     paths: ["ci/**"]
 
@@ -28,6 +28,12 @@ resources:
     branch: ((version.branch))
     private_key: ((version.private_key))
 
+- name: build-version
+  type: semver
+  source:
+    <<: *version-source
+    file: build-version
+
 - name: rc-version
   type: semver
   source:
@@ -37,26 +43,38 @@ resources:
 
 - name: dev-version
   type: semver
-  source:
-    <<: *version-source
+
+  source: &deployments-source
+    driver: git
+    initial_version: 1.0.0
+    uri: ((deployments.uri))
+    branch: ((deployments.branch))
+    private_key: ((deployments.private_key))
+
     file: dev-version
 
 - name: acceptance-version
   type: semver
+
   source:
-    <<: *version-source
+    <<: *deployments-source
+
     file: acceptance-version
 
 - name: staging-version
   type: semver
+
   source:
-    <<: *version-source
+    <<: *deployments-source
+
     file: staging-version
 
 - name: prod-version
   type: semver
+
   source:
-    <<: *version-source
+    <<: *deployments-source
+
     file: prod-version
 
 
@@ -64,25 +82,25 @@ resources:
 - name: dev
   type: semver
   source:
-    <<: *version-source
+    <<: *deployments-source
     file: dev
 
 - name: acceptance
   type: semver
   source:
-    <<: *version-source
+    <<: *deployments-source
     file: acceptance
 
 - name: staging
   type: semver
   source:
-    <<: *version-source
+    <<: *deployments-source
     file: staging
 
 - name: prod
   type: semver
   source:
-    <<: *version-source
+    <<: *deployments-source
     file: prod
 
 
@@ -112,7 +130,7 @@ jobs:
       get: api-git
       passed: [build-and-publish]
     - <<: *dev-req
-      get: version
+      get: build-version
       params: {}
     - <<: *dev-req
       get: snapshot-artifact
@@ -120,7 +138,7 @@ jobs:
   - in_parallel:
     - put: dev-version
       params:
-        file: version/version
+        file: build-version/version
     - put: dev
       params:
         file: snapshot-artifact/version
@@ -140,7 +158,7 @@ jobs:
       get: api-git
       passed: [deploy-to-dev]
     - <<: *acceptance-req
-      get: dev-version
+      get: build-version
       params: {"bump": "patch"}
     - <<: *acceptance-req
       get: snapshot-artifact
@@ -148,7 +166,7 @@ jobs:
   - in_parallel:
     - put: acceptance-version
       params:
-        file: dev-version/version
+        file: build-version/version
     - put: acceptance
       params:
         file: snapshot-artifact/version
@@ -156,10 +174,10 @@ jobs:
 
     - put: version
       params:
-        file: dev-version/version
+        file: build-version/version
     - put: rc-version
       params:
-        bump: dev-version/version
+        bump: build-version/version
 
 
 - name: deploy-to-staging
@@ -260,7 +278,7 @@ jobs:
         file: build-output/version
 
 
-    - put: dev-version
+    - put: build-version
       params:
         file: version/version
 

@@ -15,3 +15,7 @@ ci:
 version:
   <<: *defaults
   branch: version
+
+deployments:
+  <<: *defaults
+  branch: deployments

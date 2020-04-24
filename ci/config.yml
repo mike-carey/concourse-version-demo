@@ -8,7 +8,7 @@ git_resources:
     - api/**
 - name: ci
   uri: ((ci.uri))
-  branch: ((api.branch))
+  branch: ((ci.branch))
   private_key: ((ci.private_key))
   paths:
     - ci/**
@@ -16,11 +16,12 @@ git_resources:
 environments:
 - name: dev
   artifact: snapshot
+  version: build-version
   previous: build-and-publish
   trigger: true
 - name: acceptance
   artifact: snapshot
-  version: dev-version
+  version: build-version
   previous: deploy-to-dev
   version_params:
     bump: patch
@@ -42,7 +43,7 @@ builds:
     trigger: true
     params:
       pre: build
-    out: dev-version
+    out: build-version
 - name: rc
   job: nominate-for-release
   artifact: release

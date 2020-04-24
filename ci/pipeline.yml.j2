@@ -20,6 +20,12 @@ resources:
     branch: ((version.branch))
     private_key: ((version.private_key))
 
+- name: build-version
+  type: semver
+  source:
+    <<: *version-source
+    file: build-version
+
 - name: rc-version
   type: semver
   source:
@@ -29,8 +35,17 @@ resources:
 {% for env in environments %}
 - name: {{ env.name }}-version
   type: semver
+{% if loop.first %}
+  source: &deployments-source
+    driver: git
+    initial_version: 1.0.0
+    uri: ((deployments.uri))
+    branch: ((deployments.branch))
+    private_key: ((deployments.private_key))
+{% else %}
   source:
-    <<: *version-source
+    <<: *deployments-source
+{% endif %}
     file: {{ env.name }}-version
 {% endfor %}
 
@@ -38,7 +53,7 @@ resources:
 - name: {{ env.name }}
   type: semver
   source:
-    <<: *version-source
+    <<: *deployments-source
     file: {{ env.name }}
 {% endfor %}
 
