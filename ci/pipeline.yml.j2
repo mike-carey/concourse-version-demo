@@ -34,14 +34,6 @@ resources:
     file: {{ env.name }}-version
 {% endfor %}
 
-{% for artifact in artifacts %}
-- name: {{ artifact }}-artifact
-  type: semver
-  source:
-    <<: *version-source
-    file: {{ artifact }}.jar
-{% endfor %}
-
 {% for env in environments %}
 - name: {{ env.name }}
   type: semver
@@ -50,10 +42,22 @@ resources:
     file: {{ env.name }}
 {% endfor %}
 
+{% for artifact in artifacts %}
+- name: {{ artifact }}-artifact
+  type: semver
+  source:
+    <<: *version-source
+    file: {{ artifact }}.jar
+{% endfor %}
+
 jobs:
 {% for env in environments %}
 - name: deploy-to-{{ env.name }}
   serial: true
+{% if env.version_params %}
+  serial_groups:
+  - modifies-version
+{% endif %}
   plan:
   - in_parallel:
     - get: ci-git
@@ -62,6 +66,7 @@ jobs:
       passed: [{{ env.previous }}]
     - <<: *{{ env.name }}-req
       get: {{ env.version | default('version') }}
+      params: {{ env.version_params | default({}) | tojson }}
     - <<: *{{ env.name }}-req
       get: {{ env.artifact }}-artifact
       trigger: {{ env.trigger | default(False) | lower }}
@@ -72,6 +77,15 @@ jobs:
     - put: {{ env.name }}
       params:
         file: {{ env.artifact }}-artifact/version
+
+{% if env.version_params %}
+    - put: version
+      params:
+        file: {{ env.version | default('version') }}/version
+    - put: rc-version
+      params:
+        bump: {{ env.version | default('version') }}/version
+{% endif %}
 {% endfor %}
 
 {% for build in builds %}
@@ -86,11 +100,12 @@ jobs:
       passed: [{{ build.previous }}]
     - <<: *{{ build.name }}-req
       get: {{ build.version.in }}
-      trigger: {{ build.trigger | lower }}
+      trigger: {{ build.version.trigger | default(False) | lower }}
       params: {{ build.version.params | default({}) | tojson }}
 {% if not loop.first %}
     - <<: *{{ build.name }}-req
       get: {{ loop.previtem.artifact }}-artifact
+      trigger: {{ build.version.trigger | default(False) | lower }}
 {% endif %}
 {% if loop.first %}
 
@@ -125,11 +140,11 @@ jobs:
 {% else %}
         file: {{ loop.previtem.artifact }}-artifact/version
 {% endif %}
-
+{% if build.version.out %}
     - put: {{ build.version.out }}
       params:
         file: {{ build.version.in }}/version
-
+{% endif %}
 {% endfor %}
 
 

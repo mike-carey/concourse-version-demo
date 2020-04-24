@@ -20,7 +20,10 @@ environments:
   trigger: true
 - name: acceptance
   artifact: snapshot
+  version: dev-version
   previous: deploy-to-dev
+  version_params:
+    bump: patch
 - name: staging
   artifact: release
   version: rc-version
@@ -36,17 +39,18 @@ builds:
   artifact: snapshot
   version:
     in: version
+    trigger: true
     params:
-      bump: patch
-    out: version
+      pre: build
+    out: dev-version
 - name: rc
   job: nominate-for-release
   artifact: release
   previous: deploy-to-acceptance
+  trigger: true
   version:
-    in: version
+    in: rc-version
     params:
-      bump: minor
       pre: rc
     out: rc-version
 - name: release

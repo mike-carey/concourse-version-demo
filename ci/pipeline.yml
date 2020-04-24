@@ -61,20 +61,6 @@ resources:
 
 
 
-- name: release-artifact
-  type: semver
-  source:
-    <<: *version-source
-    file: release.jar
-
-- name: snapshot-artifact
-  type: semver
-  source:
-    <<: *version-source
-    file: snapshot.jar
-
-
-
 - name: dev
   type: semver
   source:
@@ -100,10 +86,25 @@ resources:
     file: prod
 
 
+
+- name: release-artifact
+  type: semver
+  source:
+    <<: *version-source
+    file: release.jar
+
+- name: snapshot-artifact
+  type: semver
+  source:
+    <<: *version-source
+    file: snapshot.jar
+
+
 jobs:
 
 - name: deploy-to-dev
   serial: true
+
   plan:
   - in_parallel:
     - get: ci-git
@@ -112,6 +113,7 @@ jobs:
       passed: [build-and-publish]
     - <<: *dev-req
       get: version
+      params: {}
     - <<: *dev-req
       get: snapshot-artifact
       trigger: true
@@ -123,8 +125,14 @@ jobs:
       params:
         file: snapshot-artifact/version
 
+
+
 - name: deploy-to-acceptance
   serial: true
+
+  serial_groups:
+  - modifies-version
+
   plan:
   - in_parallel:
     - get: ci-git
@@ -132,20 +140,31 @@ jobs:
       get: api-git
       passed: [deploy-to-dev]
     - <<: *acceptance-req
-      get: version
+      get: dev-version
+      params: {"bump": "patch"}
     - <<: *acceptance-req
       get: snapshot-artifact
       trigger: false
   - in_parallel:
     - put: acceptance-version
       params:
-        file: version/version
+        file: dev-version/version
     - put: acceptance
       params:
         file: snapshot-artifact/version
 
+
+    - put: version
+      params:
+        file: dev-version/version
+    - put: rc-version
+      params:
+        bump: dev-version/version
+
+
 - name: deploy-to-staging
   serial: true
+
   plan:
   - in_parallel:
     - get: ci-git
@@ -154,6 +173,7 @@ jobs:
       passed: [nominate-for-release]
     - <<: *staging-req
       get: rc-version
+      params: {}
     - <<: *staging-req
       get: release-artifact
       trigger: false
@@ -165,8 +185,11 @@ jobs:
       params:
         file: release-artifact/version
 
+
+
 - name: deploy-to-prod
   serial: true
+
   plan:
   - in_parallel:
     - get: ci-git
@@ -175,6 +198,7 @@ jobs:
       passed: [prepare-for-prod]
     - <<: *prod-req
       get: rc-version
+      params: {}
     - <<: *prod-req
       get: release-artifact
       trigger: false
@@ -185,6 +209,8 @@ jobs:
     - put: prod
       params:
         file: release-artifact/version
+
+
 
 
 
@@ -199,8 +225,8 @@ jobs:
       passed: []
     - <<: *build-req
       get: version
-      trigger: 
-      params: {"bump": "patch"}
+      trigger: true
+      params: {"pre": "build"}
 
 
 
@@ -234,7 +260,7 @@ jobs:
         file: build-output/version
 
 
-    - put: version
+    - put: dev-version
       params:
         file: version/version
 
@@ -249,12 +275,13 @@ jobs:
       get: api-git
       passed: [deploy-to-acceptance]
     - <<: *rc-req
-      get: version
-      trigger: 
-      params: {"bump": "minor", "pre": "rc"}
+      get: rc-version
+      trigger: false
+      params: {"pre": "rc"}
 
     - <<: *rc-req
       get: snapshot-artifact
+      trigger: false
 
 
 
@@ -267,7 +294,7 @@ jobs:
 
     - put: rc-version
       params:
-        file: version/version
+        file: rc-version/version
 
 
 - name: prepare-for-prod
@@ -281,11 +308,12 @@ jobs:
       passed: [deploy-to-staging]
     - <<: *release-req
       get: rc-version
-      trigger: 
+      trigger: false
       params: {"bump": "final"}
 
     - <<: *release-req
       get: release-artifact
+      trigger: false
 
 
 
