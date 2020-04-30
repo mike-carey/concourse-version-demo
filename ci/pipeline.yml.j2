@@ -100,6 +100,9 @@ jobs:
     - put: rc-version
       params:
         file: {{ env.version | default('version') }}/version
+    - put: build-version
+      params:
+        file: {{ env.version | default('version') }}/version
 {% endif %}
 {% endfor %}
 
@@ -135,14 +138,14 @@ jobs:
         source:
           repository: alpine
       inputs:
-      - name: version
+      - name: {{ build.version.in }}
       outputs:
       - name: build-output
       run:
         path: sh
         args:
           - '-xc'
-          - cp version/version build-output/version
+          - cp {{ build.version.in }}/version build-output/version
 
 
 {% endif %}
@@ -159,6 +162,12 @@ jobs:
     - put: {{ build.version.out }}
       params:
         file: {{ build.version.in }}/version
+
+{% if loop.last %}
+    - put: build-version
+      params:
+        file: {{ build.version.in }}/version
+{% endif %}
 {% endif %}
 {% endfor %}
 

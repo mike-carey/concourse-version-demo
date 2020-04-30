@@ -39,7 +39,7 @@ builds:
   job: build-and-publish
   artifact: snapshot
   version:
-    in: version
+    in: build-version
     trigger: true
     params:
       pre: build
